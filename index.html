@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz Servir Dieu — en direct</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=Literata:ital,wght@0,500;1,400&display=swap">
+<style>
+/* VOICE: festif mais recueilli, une salle d'église qui joue ensemble.
+   IDEA: une lampe qu'on ranime (2 Tim 1:6) : chaque bonne réponse attise la flamme.
+   PICTURE: l'écran de jeu lui-même, quatre grandes tuiles et un compte à rebours en flamme.
+   COLOUR and TYPE: nuit profonde #0f1b33, or de lampe #e8b23a, tuiles corail, turquoise, violet, vert-olive ; Sora + Literata pour les versets.
+   LAYOUT: une colonne centrée, grand écran pour l'animateur, gros boutons pour le téléphone. */
+:root{color-scheme:dark;--bg:#0f1b33;--bg2:#172748;--ink:#f3eee2;--soft:#b9c3d8;--gold:#e8b23a;--a:#e2574c;--b:#1e9e93;--c:#7a5cc7;--d:#5d8a2e;--line:#2a3d66}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:radial-gradient(ellipse at 50% -10%,#24396a 0,var(--bg) 60%) fixed;color:var(--ink);font:16px/1.5 Sora,system-ui,sans-serif;min-height:100vh;overflow-x:clip}
+main{max-width:1100px;margin:0 auto;padding:clamp(16px,3vw,40px) max(4vw,14px) 60px}
+h1{font-size:clamp(30px,5vw,52px);line-height:1.05;margin:0 0 10px;text-wrap:balance;font-weight:800}
+h2{font-size:clamp(22px,3.4vw,40px);line-height:1.12;margin:0 0 18px;text-wrap:balance;font-weight:800}
+p{margin:0 0 12px}.soft{color:var(--soft)}.small{font-size:14px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:22px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--gold)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:var(--bg2);border:1px solid var(--line);font-size:14px;color:var(--soft)}
+.btn{appearance:none;border:0;border-radius:14px;padding:14px 22px;min-height:48px;font:600 17px Sora,sans-serif;cursor:pointer;background:var(--gold);color:#1b1404}
+.btn.ghost{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn:focus-visible,.tile:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:clamp(18px,3vw,32px)}
+.hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:28px;align-items:center}
+.lamp{width:100%;max-width:360px;justify-self:center}
+.choices{display:grid;gap:14px;margin-top:20px}
+.choice{text-align:left}
+input{font:16px Sora,sans-serif;padding:14px 16px;border-radius:12px;border:2px solid var(--line);background:#0b1428;color:var(--ink);width:100%;min-height:48px}
+.qhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.timer{height:12px;border-radius:99px;background:#0b1428;overflow:hidden;margin:6px 0 22px}
+.timer>i{display:block;height:100%;background:linear-gradient(90deg,#f5d27a,var(--gold),#e2574c);transform-origin:left;transition:transform .25s linear}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.tile{display:flex;align-items:center;gap:14px;border:0;border-radius:16px;padding:18px;min-height:86px;color:#fff;font:600 clamp(16px,2.2vw,22px)/1.25 Sora,sans-serif;text-align:left;cursor:pointer;box-shadow:inset 0 -5px 0 rgba(0,0,0,.22)}
+.tile b{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);font-size:20px}
+.t0{background:var(--a)}.t1{background:var(--b)}.t2{background:var(--c)}.t3{background:var(--d)}
+.tile.dim{opacity:.28}.tile.ok{outline:4px solid #fff}
+.tile:disabled{cursor:default}
+.verse{font-family:Literata,Georgia,serif;font-style:italic;font-size:clamp(17px,2vw,21px);color:#f6e6bd;border-left:4px solid var(--gold);padding:6px 0 6px 16px;margin:18px 0}
+.big{font-size:clamp(44px,8vw,96px);font-weight:800;line-height:1;color:var(--gold)}
+.board{display:grid;gap:8px;margin-top:10px}
+.brow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;background:#0b1428;border-radius:12px;padding:10px 14px}
+.brow .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brow .s{font-variant-numeric:tabular-nums;font-weight:600;color:var(--gold)}
+.brow.me{outline:2px solid var(--gold)}
+.dist{display:grid;gap:8px;margin-top:14px}
+.dbar{display:grid;grid-template-columns:34px minmax(0,1fr) 40px;gap:10px;align-items:center;font-size:15px}
+.dbar span{height:22px;border-radius:6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{background:#0b1428;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:15px}
+.feedback{font-size:clamp(28px,5vw,44px);font-weight:800}
+.good{color:#8fe3a2}.bad{color:#ff9d93}
+.note{font-size:14px;color:var(--soft);border-top:1px solid var(--line);margin-top:22px;padding-top:12px}
+@keyframes flick{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.07) translateY(-2px)}}
+.flame{transform-origin:50% 90%;animation:flick 1.6s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.flame{animation:none}.timer>i{transition:none}}
+@media(max-width:700px){.hero{grid-template-columns:1fr}.lamp{max-width:220px;order:-1}.tiles{grid-template-columns:1fr}.tile{min-height:70px}}
+
+.code{font-size:clamp(48px,9vw,110px);font-weight:800;letter-spacing:.12em;color:var(--gold);line-height:1}
+.qr{background:#fff;padding:12px;border-radius:14px;display:inline-block;margin-top:10px}
+.qr img,.qr canvas{display:block;width:200px;height:200px}
+.url{word-break:break-all;font-size:15px;color:var(--soft)}
+.err{color:#ff9d93}
+</style>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<main id="app"><div class="card"><h1>Servir Dieu sans négligence</h1><p class="soft">Chargement…</p></div></main>
+<script>
+{
+const Q=[
+ {q:"1 Pierre 4:10 : que désigne le mot « dispensateurs » (grec oikonomos) ?",a:["Des prophètes de l'avenir","Des intendants de la maison du maître","Des prêtres du temple","Des propriétaires des biens"],c:1,t:30,v:"L'intendant ne possède rien : il gère ce qui appartient à son maître et lui rendra des comptes. La King James dit « good stewards »."},
+ {q:"Genèse 2:15 : le verbe hébreu « avad » (cultiver) signifie aussi…",a:["Servir","Posséder","Se reposer","Conquérir"],c:0,t:20,v:"Même racine que « eved », le serviteur. Cultiver le jardin, c'était déjà servir."},
+ {q:"Quand l'homme a-t-il reçu son premier mandat de service ?",a:["Après la chute","Au déluge","Avant la chute, en Éden","Au mont Sinaï"],c:2,t:20,v:"Le service n'est pas une punition : il fait partie de notre vocation d'origine (Genèse 2:15, 19)."},
+ {q:"Exode 4:12 : que répond Dieu à Moïse qui se dit incapable de parler ?",a:["« Retourne garder tes brebis »","« Attends d'être prêt »","« Tu n'auras rien à dire »","« Je serai avec ta bouche »"],c:3,t:30,v:"« Va donc, je serai avec ta bouche. » Dieu qualifie ceux qu'il appelle : « Notre capacité vient de Dieu » (2 Corinthiens 3:5)."},
+ {q:"Le grec « charisma » (don) vient de « charis », qui signifie…",a:["La force","La grâce","La sagesse","La récompense"],c:1,t:20,v:"Un don n'est pas une médaille, c'est une grâce pour servir (1 Corinthiens 12:4-7)."},
+ {q:"Exode 31 : Betsaleel est rempli de l'Esprit de Dieu pour…",a:["Construire le tabernacle","Prêcher au peuple","Diriger l'armée","Expliquer les songes"],c:0,t:20,v:"Il n'est pas équipé pour prêcher mais pour construire : savoir-faire et créativité servent Dieu."},
+ {q:"1 Corinthiens 12:18 : qui a placé chaque membre dans le corps ?",a:["Chacun, selon son choix","Les anciens de l'Église","Dieu, comme il a voulu","Les apôtres"],c:2,t:20,v:"« Dieu a placé chacun des membres dans le corps comme il a voulu. » Les membres qui paraissent faibles sont nécessaires (12:22)."},
+ {q:"Matthieu 25 : pourquoi le 3e serviteur a-t-il enterré son talent ?",a:["Il l'avait prêté","Il l'avait dépensé","Il l'avait perdu","Il a eu peur"],c:3,t:20,v:"Il n'a rien volé ni gaspillé, mais il n'a rien fait. « Celui qui sait faire ce qui est bien, et qui ne le fait pas, commet un péché » (Jacques 4:17)."},
+ {q:"2 Timothée 1:6 : « ranimer le don » évoque l'image de…",a:["Raviver un feu","Arroser une plante","Réveiller un dormeur","Polir une pierre"],c:0,t:20,v:"Anazôpureô : ana (de nouveau) + zôos (vivant) + pur (feu). Rendre au feu sa vie. KJV : « stir up the gift of God »."},
+ {q:"Qui a dit : « Moi et ma maison, nous servirons l'Éternel » ?",a:["Moïse","Josué","David","Abraham"],c:1,t:20,v:"Josué 24:15. Le service découle de ce que nous sommes, pas d'un titre."}
+];
+const L=["A","B","C","D"],PREFIX="servirdieu-quiz-";
+const app=document.getElementById('app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const pts=(qi,ans)=>{if(!ans)return 0;const [ch,ms]=ans;if(ch!==Q[qi].c)return 0;const lim=Q[qi].t*1000;return Math.round(500+500*Math.max(0,1-Math.min(ms,lim)/lim));};
+const total=a=>Object.keys(a||{}).reduce((s,k)=>s+pts(+k,a[k]),0);
+const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const lamp=`<svg class="lamp" viewBox="0 0 300 240" aria-label="Une lampe à huile allumée"><defs><radialGradient id="g" cx="50%" cy="40%" r="50%"><stop offset="0" stop-color="#ffd978" stop-opacity=".55"/><stop offset="1" stop-color="#ffd978" stop-opacity="0"/></radialGradient><linearGradient id="f" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e2574c"/><stop offset=".5" stop-color="#e8b23a"/><stop offset="1" stop-color="#fff2c4"/></linearGradient><linearGradient id="l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c98a3a"/><stop offset="1" stop-color="#7a4a1c"/></linearGradient></defs><circle cx="150" cy="95" r="95" fill="url(#g)"/><ellipse cx="150" cy="222" rx="110" ry="10" fill="#0a1224"/><path class="flame" d="M150 40c18 26 24 44 14 62-6 10-22 12-30 2-10-12-6-30 16-64z" fill="url(#f)"/><path d="M60 170c0-24 40-40 90-40 34 0 62 6 80 16l40-6c-10 18-28 30-46 36-16 20-46 34-74 34-50 0-90-16-90-40z" fill="url(#l)"/><path d="M78 168c14 10 40 16 72 16s56-6 70-14" stroke="#f3c77a" stroke-width="3" fill="none" opacity=".55"/><rect x="141" y="112" width="18" height="22" rx="4" fill="#5a3412"/></svg>`;
+const isPhone=matchMedia('(max-width:820px)').matches||/Android|iPhone|iPad/i.test(navigator.userAgent);
+const params=new URLSearchParams(location.search);
+let view='intro',tick=null;
+function shell(inner,tag){app.innerHTML=`<div class="top"><div class="brand">✦ Étude biblique · Quiz en direct</div><span class="pill" id="status">${esc(tag||'')}</span></div>${inner}`;}
+function setStatus(t){const s=document.getElementById('status');if(s)s.textContent=t;}
+function tilesHTML(qi,o){return `<div class="tiles">${Q[qi].a.map((x,i)=>`<button class="tile t${i} ${o.cls?o.cls(i):''}" data-i="${i}" ${o.disabled?'disabled':''}><b>${L[i]}</b><span>${esc(x)}</span></button>`).join('')}</div>`;}
+function timerRun(sec,t0,onEnd){clearInterval(tick);const upd=()=>{const left=Math.max(0,sec*1000-(Date.now()-t0));const b=document.getElementById('bar');if(b)b.style.transform=`scaleX(${left/(sec*1000)})`;const n=document.getElementById('secs');if(n)n.textContent=Math.ceil(left/1000)+' s';if(left<=0){clearInterval(tick);onEnd&&onEnd();}};upd();tick=setInterval(upd,250);}
+function boardHTML(rows,me){if(!rows.length)return `<p class="soft">Personne n'a encore marqué de points.</p>`;return `<div class="board">${rows.slice(0,10).map((r,i)=>`<div class="brow ${me&&r.n===me?'me':''}"><b>${i+1}</b><span class="n">${esc(r.n)}</span><span class="s">${r.s} pts</span></div>`).join('')}</div>`;}
+const rk=n=>n+(n===1?'er':'e');
+
+function intro(){
+  view='intro';clearInterval(tick);
+  shell(`<div class="card hero"><div><h1>Servir Dieu sans négligence</h1><p class="soft">10 questions tirées de l'exhortation. L'animateur projette le jeu depuis un ordinateur ; les participants répondent avec leur téléphone, sans compte ni application.</p><div class="row" style="margin-top:20px">${isPhone?`<button class="btn" id="pl">Je participe</button><button class="btn ghost" id="ho">J'anime</button>`:`<button class="btn" id="ho">J'anime (ordinateur)</button><button class="btn ghost" id="pl">Je participe</button>`}</div></div>${lamp}</div>`,'Accueil');
+  document.getElementById('ho').onclick=hostStart;document.getElementById('pl').onclick=()=>joinForm();
+}
+
+/* ================= ANIMATEUR ================= */
+let hpeer=null,code='',players={},live={phase:'lobby',q:-1,startedAt:0},revealT=null;
+function hostStart(){view='host';code=String(Math.floor(1000+Math.random()*9000));shell(`<div class="card"><h2>Ouverture de la salle…</h2><p class="soft">Connexion au relais en cours.</p></div>`,'Animateur');
+  try{hpeer=new Peer(PREFIX+code,{debug:1});}catch(e){shell(`<div class="card"><h2 class="err">Connexion impossible</h2><p>La bibliothèque de connexion n'a pas pu se charger. Vérifiez la connexion Internet de l'ordinateur.</p></div>`,'Animateur');return;}
+  hpeer.on('open',()=>hostRender());
+  hpeer.on('error',e=>{if(e.type==='unavailable-id'){hpeer.destroy();hostStart();}else setStatus('Erreur : '+e.type);});
+  hpeer.on('disconnected',()=>{setStatus('Reconnexion…');try{hpeer.reconnect();}catch(e){}});
+  hpeer.on('connection',conn=>{
+    conn.on('data',d=>hostData(conn,d));
+    conn.on('close',()=>{for(const k in players)if(players[k].conn===conn)players[k].conn=null;hostLive();});
+  });
+}
+function hostData(conn,d){
+  if(!d||typeof d!=='object')return;
+  if(d.t==='hello'){const n=String(d.n||'').trim().slice(0,20);if(!n)return;const p=players[n]||{n,a:{}};p.conn=conn;players[n]=p;send(conn,stateFor(p));hostLive();return;}
+  if(d.t==='ans'){const p=Object.values(players).find(x=>x.conn===conn);if(!p||live.phase!=='question'||+d.q!==live.q||p.a[live.q])return;const ch=+d.c,ms=+d.ms;if(!(ch>=0&&ch<4))return;p.a[live.q]=[ch,Math.max(0,Math.min(ms,Q[live.q].t*1000))];hostLive();
+    if(Object.values(players).every(x=>x.a[live.q]||!x.conn))setTimeout(reveal,600);}
+}
+function send(conn,msg){try{if(conn&&conn.open)conn.send(msg);}catch(e){}}
+function rows(){return Object.values(players).map(p=>({n:p.n,s:total(p.a)})).sort((x,y)=>y.s-x.s);}
+function stateFor(p){const r=rows();const pos=r.findIndex(x=>x.n===p.n)+1;return {t:'state',phase:live.phase,q:live.q,mine:p.a[live.q]||null,score:total(p.a),rank:pos||null,count:r.length,top:r.slice(0,3)};}
+function broadcast(){for(const p of Object.values(players))send(p.conn,stateFor(p));}
+function joinURL(){const u=new URL(location.href);u.search='?code='+code;u.hash='';return u.toString();}
+function nextQ(){clearTimeout(revealT);const q=live.q+1;if(q>=Q.length){live={phase:'end',q:live.q,startedAt:0};broadcast();hostRender();return;}live={phase:'question',q,startedAt:Date.now()};broadcast();hostRender();revealT=setTimeout(reveal,Q[q].t*1000+1500);}
+function reveal(){if(live.phase!=='question')return;clearTimeout(revealT);live={...live,phase:'reveal'};broadcast();hostRender();}
+function hostLive(){
+  if(view!=='host')return;
+  const names=Object.values(players);
+  if(live.phase==='lobby'){const c=document.getElementById('cnt');if(c){c.textContent=names.length;document.getElementById('chips').innerHTML=names.map(p=>`<span class="chip" style="${p.conn?'':'opacity:.4'}">${esc(p.n)}</span>`).join('');}}
+  if(live.phase==='question'){const a=document.getElementById('ans');if(a)a.textContent=names.filter(p=>p.a[live.q]).length+' / '+names.length+' réponses';}
+}
+function hostRender(){
+  if(view!=='host')return;clearInterval(tick);
+  const ph=live.phase,names=Object.values(players);
+  if(ph==='lobby'){
+    shell(`<div class="card hero"><div><p class="soft">Code de la partie</p><p class="code">${code}</p><p style="margin-top:14px">Sur votre téléphone, scannez le QR code ou ouvrez :</p><p class="url">${esc(joinURL())}</p><div class="qr" id="qr"></div></div><div><p class="big" id="cnt">${names.length}</p><p>participant(s) connecté(s)</p><div class="chips" id="chips"></div><div class="row" style="margin-top:22px"><button class="btn" id="go">Lancer la première question</button></div><p class="note">Gardez cette page ouverte pendant tout le jeu : la fermer met fin à la partie.</p></div></div>`,'Animateur');
+    try{new QRCode(document.getElementById('qr'),{text:joinURL(),width:200,height:200,correctLevel:QRCode.CorrectLevel.M});}catch(e){document.getElementById('qr').remove();}
+    hostLive();document.getElementById('go').onclick=nextQ;return;}
+  if(ph==='question'){const i=live.q;
+    shell(`<div class="card"><div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill" id="secs"></span><span class="pill" id="ans"></span><span class="pill">Code ${code}</span></div><h2>${esc(Q[i].q)}</h2><div class="timer"><i id="bar"></i></div>${tilesHTML(i,{disabled:1})}<div class="row" style="margin-top:18px"><button class="btn ghost" id="rv">Révéler maintenant</button></div></div>`,'Animateur');
+    hostLive();document.getElementById('rv').onclick=reveal;timerRun(Q[i].t,live.startedAt,null);return;}
+  if(ph==='reveal'){const i=live.q,cnt=[0,0,0,0];names.forEach(p=>{const x=p.a[i];if(x)cnt[x[0]]++;});const mx=Math.max(1,...cnt);
+    shell(`<div class="card"><div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill">Code ${code}</span></div><h2>${esc(Q[i].q)}</h2>${tilesHTML(i,{disabled:1,cls:k=>k===Q[i].c?'ok':'dim'})}<div class="dist">${cnt.map((c,k)=>`<div class="dbar"><b>${L[k]}</b><span class="t${k}" style="width:${Math.max(2,c/mx*100)}%"></span><span>${c}</span></div>`).join('')}</div><p class="verse">${esc(Q[i].v)}</p><h2 style="margin-top:20px">Classement</h2>${boardHTML(rows())}<div class="row" style="margin-top:18px"><button class="btn" id="nx">${i+1<Q.length?'Question suivante':'Voir le podium'}</button></div></div>`,'Animateur');
+    document.getElementById('nx').onclick=nextQ;return;}
+  if(ph==='end'){
+    shell(`<div class="card"><h1>Podium</h1>${boardHTML(rows())}<p class="verse">« C'est bien, bon et fidèle serviteur ; tu as été fidèle en peu de chose, je te confierai beaucoup. » Matthieu 25:21</p><div class="row"><button class="btn" id="again">Rejouer avec les mêmes joueurs</button></div></div>`,'Animateur');
+    document.getElementById('again').onclick=()=>{for(const p of Object.values(players))p.a={};live={phase:'lobby',q:-1,startedAt:0};broadcast();hostRender();};}
+}
+
+/* ================= PARTICIPANT ================= */
+let ppeer=null,conn=null,me=store.get('quizlive')||{code:'',nick:''},st=null,recvAt=0,lastKey='',retry=0;
+function joinForm(err){
+  view='player';clearInterval(tick);
+  const c=params.get('code')||me.code||'';
+  shell(`<div class="card"><h2>Rejoindre la partie</h2>${err?`<p class="err">${esc(err)}</p>`:''}<form id="jf"><label class="soft small" for="cd">Code affiché à l'écran</label><input id="cd" inputmode="numeric" maxlength="4" value="${esc(c)}" placeholder="1234"><label class="soft small" for="nk" style="display:block;margin-top:12px">Votre pseudo</label><input id="nk" maxlength="20" value="${esc(me.nick)}" placeholder="Ex. Emma" autocomplete="nickname"><div class="row" style="margin-top:16px"><button class="btn" type="submit">Rejoindre</button></div></form></div>`,'Participant');
+  document.getElementById('jf').onsubmit=e=>{e.preventDefault();const cd=document.getElementById('cd').value.trim(),nk=document.getElementById('nk').value.trim().slice(0,20);if(!/^\d{4}$/.test(cd)){joinForm("Le code doit comporter 4 chiffres.");return;}if(!nk){joinForm("Choisissez un pseudo.");return;}me={code:cd,nick:nk};store.set('quizlive',me);connect();};
+}
+function connect(){
+  shell(`<div class="card"><h2>Connexion…</h2><p class="soft">Recherche de la partie ${esc(me.code)}.</p></div>`,'Participant');
+  try{if(ppeer)ppeer.destroy();ppeer=new Peer({debug:1});}catch(e){joinForm("Connexion impossible : vérifiez votre accès Internet.");return;}
+  ppeer.on('open',()=>{conn=ppeer.connect(PREFIX+me.code,{reliable:true});
+    conn.on('open',()=>{retry=0;conn.send({t:'hello',n:me.nick});});
+    conn.on('data',d=>{if(d&&d.t==='state'){const key=d.phase+':'+d.q;if(key!==lastKey){lastKey=key;recvAt=Date.now();}st=d;playerRender();}});
+    conn.on('close',()=>lost());});
+  ppeer.on('error',e=>{if(e.type==='peer-unavailable')joinForm("Aucune partie avec ce code. Vérifiez le code à l'écran.");else lost();});
+}
+function lost(){if(view!=='player')return;if(retry<5){retry++;shell(`<div class="card"><h2>Connexion perdue</h2><p class="soft">Nouvelle tentative (${retry}/5)…</p></div>`,'Participant');setTimeout(connect,1500*retry);}else joinForm("La connexion à la partie a été perdue.");}
+function playerRender(){
+  if(view!=='player'||!st)return;clearInterval(tick);
+  const head=`<div class="qhead"><span class="pill">${esc(me.nick)}</span><span class="pill">${st.score} pts</span></div>`,i=st.q;
+  if(st.phase==='lobby'){shell(`<div class="card">${head}<h2>Vous êtes inscrit !</h2><p class="soft">Regardez le grand écran : la partie va commencer.</p>${lamp}</div>`,'Participant');return;}
+  if(st.phase==='question'){
+    if(st.mine){shell(`<div class="card">${head}<h2>Réponse enregistrée</h2><p class="soft">Attendez la révélation sur le grand écran.</p></div>`,'Participant');return;}
+    shell(`<div class="card">${head}<div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill" id="secs"></span></div><h2>${esc(Q[i].q)}</h2><div class="timer"><i id="bar"></i></div>${tilesHTML(i,{})}</div>`,'Participant');
+    app.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{if(st.mine)return;const c=+b.dataset.i;st={...st,mine:[c,Date.now()-recvAt]};try{conn.send({t:'ans',q:i,c,ms:Date.now()-recvAt});}catch(e){}playerRender();});
+    timerRun(Q[i].t,recvAt,()=>{if(!st.mine)shell(`<div class="card">${head}<h2>Temps écoulé</h2><p class="soft">Attendez la révélation sur le grand écran.</p></div>`,'Participant');});return;}
+  if(st.phase==='reveal'){const ok=st.mine&&st.mine[0]===Q[i].c;
+    shell(`<div class="card">${head}<p class="feedback ${ok?'good':'bad'}">${ok?`Bonne réponse ! +${pts(i,st.mine)}`:st.mine?'Pas tout à fait':'Pas de réponse'}</p><p>La bonne réponse : <b>${L[Q[i].c]} — ${esc(Q[i].a[Q[i].c])}</b></p><p class="verse">${esc(Q[i].v)}</p>${st.rank?`<p class="soft">Vous êtes ${rk(st.rank)} sur ${st.count}.</p>`:''}</div>`,'Participant');return;}
+  if(st.phase==='end'){shell(`<div class="card hero"><div><h2>Partie terminée</h2><p class="big">${st.score} pts</p>${st.rank?`<p>Classement final : ${rk(st.rank)} sur ${st.count}</p>`:''}<p class="verse">« C'est bien, bon et fidèle serviteur. » Matthieu 25:21</p></div>${lamp}</div>`,'Participant');}
+}
+
+if(params.get('code')){me.code=params.get('code');joinForm();}else intro();
+}
+</script>
+</body>
+</html>
