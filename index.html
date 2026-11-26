@@ -66,6 +66,8 @@ input{font:16px Sora,sans-serif;padding:14px 16px;border-radius:12px;border:2px 
 .qr img,.qr canvas{display:block;width:200px;height:200px}
 .url{word-break:break-all;font-size:15px;color:var(--soft)}
 .err{color:#ff9d93}
+.modal{position:fixed;inset:0;background:rgba(5,10,22,.72);display:grid;place-items:center;padding:16px;z-index:10}.modal .card{max-width:520px;width:100%}
+.hrow{width:100%;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}.hrow:hover{outline:2px solid var(--line)}.hq{display:grid;gap:4px;margin-bottom:6px}
 </style>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -105,9 +107,9 @@ const rk=n=>n+(n===1?'er':'e');
 
 function intro(){
   view='intro';clearInterval(tick);
-  shell(`<div class="card hero"><div><h1>Servir Dieu sans négligence</h1><p class="soft">10 questions tirées de l'exhortation. L'animateur projette le jeu depuis un ordinateur ; les participants répondent avec leur téléphone, sans compte ni application.</p><div class="row" style="margin-top:20px">${isAdmin?`<button class="btn" id="ho">J'anime (ordinateur)</button><button class="btn ghost" id="pl">Je participe</button><button class="btn ghost" id="lo">Quitter le mode animateur</button>`:`<button class="btn" id="pl">Je participe</button>`}</div></div>${lamp}</div>`,isAdmin?'Animateur reconnu':'Accueil');
+  shell(`<div class="card hero"><div><h1>Servir Dieu sans négligence</h1><p class="soft">10 questions tirées de l'exhortation. L'animateur projette le jeu depuis un ordinateur ; les participants répondent avec leur téléphone, sans compte ni application.</p><div class="row" style="margin-top:20px">${isAdmin?`<button class="btn" id="ho">J'anime (ordinateur)</button><button class="btn ghost" id="hist">Historique</button><button class="btn ghost" id="pl">Je participe</button><button class="btn ghost" id="lo">Quitter le mode animateur</button>`:`<button class="btn" id="pl">Je participe</button>`}</div></div>${lamp}</div>`,isAdmin?'Animateur reconnu':'Accueil');
   document.getElementById('pl').onclick=()=>joinForm();
-  if(isAdmin){document.getElementById('ho').onclick=hostStart;document.getElementById('lo').onclick=()=>{isAdmin=false;try{localStorage.removeItem('quizadmin')}catch(e){}intro();};}
+  if(isAdmin){document.getElementById('ho').onclick=hostStart;document.getElementById('hist').onclick=()=>showHistory(intro);document.getElementById('lo').onclick=()=>{isAdmin=false;try{localStorage.removeItem('quizadmin')}catch(e){}intro();};}
 }
 /* Accès animateur : réservé au détenteur de la clé (seule son empreinte SHA-256 est dans ce fichier). */
 const ADMIN_HASH="1337816538b8f887d96f53bafa27ce45d33224bd8bfe5cf17acea78f7b21412d";
@@ -122,7 +124,7 @@ async function checkAdmin(){
 
 /* ================= ANIMATEUR ================= */
 let hpeer=null,code='',players={},live={phase:'lobby',q:-1,startedAt:0},revealT=null;
-function hostStart(){if(!isAdmin){intro();return;}view='host';code=String(Math.floor(1000+Math.random()*9000));shell(`<div class="card"><h2>Ouverture de la salle…</h2><p class="soft">Connexion au relais en cours.</p></div>`,'Animateur');
+function hostStart(){if(!isAdmin){intro();return;}view='host';players={};live={phase:'lobby',q:-1,startedAt:0};gameId=Date.now();try{hpeer&&hpeer.destroy();}catch(e){}code=String(Math.floor(1000+Math.random()*9000));shell(`<div class="card"><h2>Ouverture de la salle…</h2><p class="soft">Connexion au relais en cours.</p></div>`,'Animateur');
   try{hpeer=new Peer(PREFIX+code,{debug:1,...ICE});}catch(e){shell(`<div class="card"><h2 class="err">Connexion impossible</h2><p>La bibliothèque de connexion n'a pas pu se charger. Vérifiez la connexion Internet de l'ordinateur.</p></div>`,'Animateur');return;}
   hpeer.on('open',()=>hostRender());
   hpeer.on('error',e=>{if(e.type==='unavailable-id'){hpeer.destroy();hostStart();}else setStatus('Erreur : '+e.type);});
@@ -149,8 +151,50 @@ function rows(){return Object.values(players).map(p=>({n:p.n,s:total(p.a)})).sor
 function stateFor(p){const r=rows();const pos=r.findIndex(x=>x.n===p.n)+1;return {t:'state',name:p.n,phase:live.phase,q:live.q,mine:p.a[live.q]||null,score:total(p.a),rank:pos||null,count:r.length,top:r.slice(0,3)};}
 function broadcast(){for(const p of Object.values(players))send(p.conn,stateFor(p));}
 function joinURL(){const u=new URL(location.href);u.search='?code='+code;u.hash='';return u.toString();}
-function nextQ(){clearTimeout(revealT);const q=live.q+1;if(q>=Q.length){live={phase:'end',q:live.q,startedAt:0};broadcast();hostRender();return;}live={phase:'question',q,startedAt:Date.now()};broadcast();hostRender();revealT=setTimeout(reveal,Q[q].t*1000+1500);}
-function reveal(){if(live.phase!=='question')return;clearTimeout(revealT);live={...live,phase:'reveal'};broadcast();hostRender();}
+let gameId=Date.now();
+function setLive(l){live=l;broadcast();hostRender();}
+function nextQ(){clearTimeout(revealT);const q=live.q+1;if(q>=Q.length){setLive({phase:'end',q:Q.length-1,startedAt:0});saveHistory('terminée');return;}
+  for(const p of Object.values(players))delete p.a[q];
+  setLive({phase:'question',q,startedAt:Date.now()});revealT=setTimeout(reveal,Q[q].t*1000+1500);}
+function reveal(){if(live.phase!=='question')return;clearTimeout(revealT);setLive({...live,phase:'reveal'});saveHistory('en cours');}
+function prevStep(){clearTimeout(revealT);const q=live.q;
+  if(live.phase==='end'){setLive({phase:'reveal',q:Q.length-1,startedAt:0});return;}
+  if(live.phase==='question'){for(const p of Object.values(players))delete p.a[q];}
+  if(q<=0){setLive({phase:'lobby',q:-1,startedAt:0});return;}
+  setLive({phase:'reveal',q:q-1,startedAt:0});}
+function anyAnswer(){return Object.values(players).some(p=>Object.keys(p.a).length);}
+function restartGame(){clearTimeout(revealT);if(anyAnswer()&&live.phase!=='end')saveHistory('interrompue');for(const p of Object.values(players))p.a={};gameId=Date.now();setLive({phase:'lobby',q:-1,startedAt:0});}
+function quitGame(){clearTimeout(revealT);if(anyAnswer()&&live.phase!=='end')saveHistory('interrompue');
+  for(const p of Object.values(players))send(p.conn,{t:'state',phase:'closed',q:-1,score:total(p.a)});
+  setTimeout(()=>{try{hpeer&&hpeer.destroy();}catch(e){}hpeer=null;players={};live={phase:'lobby',q:-1,startedAt:0};},400);intro();}
+function askConfirm(msg,yes,onYes){const box=document.createElement('div');box.className='modal';box.innerHTML=`<div class="card"><h2>${esc(msg)}</h2><div class="row" style="margin-top:16px"><button class="btn" id="cy">${esc(yes)}</button><button class="btn ghost" id="cn">Annuler</button></div></div>`;document.body.appendChild(box);box.querySelector('#cn').onclick=()=>box.remove();box.querySelector('#cy').onclick=()=>{box.remove();onYes();};box.querySelector('#cy').focus();}
+function navHTML(main){return `<div class="row" style="margin-top:18px">${main||''}<button class="btn ghost" id="pv">← Précédent</button><button class="btn ghost" id="rs">Recommencer</button><button class="btn ghost" id="qt">Quitter</button></div>`;}
+function bindNav(){const pv=document.getElementById('pv');if(pv)pv.onclick=prevStep;
+  const rs=document.getElementById('rs');if(rs)rs.onclick=()=>askConfirm('Recommencer la partie depuis le début ?','Recommencer',restartGame);
+  const qt=document.getElementById('qt');if(qt)qt.onclick=()=>askConfirm('Quitter la partie ? Les participants seront déconnectés.','Quitter',quitGame);}
+
+/* ----- Historique des sessions (gardé sur cet ordinateur) ----- */
+const HKEY='quizhistory';
+function loadHist(){const h=store.get(HKEY);return Array.isArray(h)?h:[];}
+function saveHistory(status){
+  const r=rows();if(!r.length)return;
+  const last=live.phase==='end'?Q.length-1:(live.phase==='question'?live.q-1:live.q);
+  const perQ=[];for(let i=0;i<=last;i++){let ok=0,ans=0;for(const p of Object.values(players)){const x=p.a[i];if(x){ans++;if(x[0]===Q[i].c)ok++;}}perQ.push({ok,ans});}
+  const rec={id:gameId,date:new Date(gameId).toISOString(),end:new Date().toISOString(),code,status,n:r.length,asked:last+1,rows:r.slice(0,100),perQ};
+  const h=loadHist().filter(x=>x.id!==gameId);h.unshift(rec);store.set(HKEY,h.slice(0,60));}
+const fmtD=iso=>{try{return new Date(iso).toLocaleString('fr-FR',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}catch(e){return iso}};
+let histBack=null;
+function showHistory(back){histBack=back||histBack||intro;view='hist';clearInterval(tick);const h=loadHist();
+  shell(`<div class="card"><div class="qhead"><h2 style="margin:0">Historique des sessions</h2><button class="btn ghost" id="hb">← Retour</button></div>${h.length?`<div class="board">${h.map((x,i)=>`<button class="brow hrow" data-i="${i}"><b>${i+1}</b><span class="n">${esc(fmtD(x.date))} · ${x.n} participant${x.n>1?'s':''} · ${x.asked}/${Q.length} questions<br><span class="soft small">Vainqueur : ${esc(x.rows[0]?x.rows[0].n:'—')} (${x.rows[0]?x.rows[0].s:0} pts) · code ${esc(x.code)}</span></span><span class="s">${esc(x.status)}</span></button>`).join('')}</div><div class="row" style="margin-top:16px"><button class="btn ghost" id="hclr">Tout effacer</button></div>`:`<p class="soft">Aucune session enregistrée sur cet ordinateur pour l'instant. Chaque partie s'y ajoute automatiquement.</p>`}<p class="note">L'historique est conservé dans le navigateur de cet ordinateur.</p></div>`,'Animateur');
+  document.getElementById('hb').onclick=()=>{const b=histBack;histBack=null;b();};
+  app.querySelectorAll('.hrow').forEach(b=>b.onclick=()=>showSession(+b.dataset.i));
+  const c=document.getElementById('hclr');if(c)c.onclick=()=>askConfirm("Effacer tout l'historique ?",'Effacer',()=>{store.set(HKEY,[]);showHistory();});}
+function showSession(i){const x=loadHist()[i];if(!x){showHistory();return;}
+  shell(`<div class="card"><div class="qhead"><h2 style="margin:0">Session du ${esc(fmtD(x.date))}</h2><button class="btn ghost" id="hb">← Historique</button></div><p class="soft">${x.n} participant${x.n>1?'s':''} · ${x.asked}/${Q.length} questions · ${esc(x.status)} · code ${esc(x.code)}</p><h2 style="margin-top:18px">Classement</h2>${boardHTML(x.rows)}<h2 style="margin-top:22px">Réussite par question</h2><div class="dist">${(x.perQ||[]).map((r,k)=>{const pc=r.ans?Math.round(r.ok/r.ans*100):0;return `<div class="hq"><span class="small">Q${k+1}. ${esc(Q[k]?Q[k].q:'')}</span><div class="dbar"><b>${pc}%</b><span style="width:${Math.max(2,pc)}%;background:var(--gold)"></span><span class="small">${r.ok}/${r.ans}</span></div></div>`}).join('')}</div><div class="row" style="margin-top:18px"><button class="btn ghost" id="hdel">Supprimer cette session</button></div></div>`,'Animateur');
+  document.getElementById('hb').onclick=()=>showHistory();
+  document.getElementById('hdel').onclick=()=>askConfirm('Supprimer cette session ?','Supprimer',()=>{store.set(HKEY,loadHist().filter(y=>y.id!==x.id));showHistory();});}
+function backToHost(){view='host';hostRender();}
+
 function hostLive(){
   if(view!=='host')return;
   const names=Object.values(players);
@@ -161,18 +205,18 @@ function hostRender(){
   if(view!=='host')return;clearInterval(tick);
   const ph=live.phase,names=Object.values(players);
   if(ph==='lobby'){
-    shell(`<div class="card hero"><div><p class="soft">Code de la partie</p><p class="code">${code}</p><p style="margin-top:14px">Sur votre téléphone, scannez le QR code ou ouvrez :</p><p class="url">${esc(joinURL())}</p><div class="qr" id="qr"></div></div><div><p class="big" id="cnt">${names.length}</p><p>participant(s) connecté(s)</p><div class="chips" id="chips"></div><div class="row" style="margin-top:22px"><button class="btn" id="go">Lancer la première question</button></div><p class="note">Gardez cette page ouverte pendant tout le jeu : la fermer met fin à la partie.</p></div></div>`,'Animateur');
-    try{new QRCode(document.getElementById('qr'),{text:joinURL(),width:200,height:200,correctLevel:QRCode.CorrectLevel.M});}catch(e){document.getElementById('qr').remove();}
-    hostLive();document.getElementById('go').onclick=nextQ;return;}
+    shell(`<div class="card hero"><div><p class="soft">Code de la partie</p><p class="code">${code}</p><p style="margin-top:14px">Sur votre téléphone, scannez le QR code ou ouvrez :</p><p class="url">${esc(joinURL())}</p><div class="qr" id="qr"></div></div><div><p class="big" id="cnt">${names.length}</p><p>participant(s) connecté(s)</p><div class="chips" id="chips"></div><div class="row" style="margin-top:22px"><button class="btn" id="go">Lancer la première question</button><button class="btn ghost" id="hi">Historique</button><button class="btn ghost" id="qt">Quitter</button></div><p class="note">Gardez cette page ouverte pendant tout le jeu : la fermer met fin à la partie.</p></div></div>`,'Animateur');
+    try{new QRCode(document.getElementById('qr'),{text:joinURL(),width:200,height:200,correctLevel:QRCode.CorrectLevel.M});}catch(e){const q=document.getElementById('qr');if(q)q.remove();}
+    hostLive();document.getElementById('go').onclick=nextQ;document.getElementById('hi').onclick=()=>showHistory(backToHost);bindNav();return;}
   if(ph==='question'){const i=live.q;
-    shell(`<div class="card"><div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill" id="secs"></span><span class="pill" id="ans"></span><span class="pill">Code ${code}</span></div><h2>${esc(Q[i].q)}</h2><div class="timer"><i id="bar"></i></div>${tilesHTML(i,{disabled:1})}<div class="row" style="margin-top:18px"><button class="btn ghost" id="rv">Révéler maintenant</button></div></div>`,'Animateur');
-    hostLive();document.getElementById('rv').onclick=reveal;timerRun(Q[i].t,live.startedAt,null);return;}
+    shell(`<div class="card"><div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill" id="secs"></span><span class="pill" id="ans"></span><span class="pill">Code ${code}</span></div><h2>${esc(Q[i].q)}</h2><div class="timer"><i id="bar"></i></div>${tilesHTML(i,{disabled:1})}${navHTML('<button class="btn" id="rv">Révéler maintenant</button>')}</div>`,'Animateur');
+    hostLive();document.getElementById('rv').onclick=reveal;bindNav();timerRun(Q[i].t,live.startedAt,null);return;}
   if(ph==='reveal'){const i=live.q,cnt=[0,0,0,0];names.forEach(p=>{const x=p.a[i];if(x)cnt[x[0]]++;});const mx=Math.max(1,...cnt);
-    shell(`<div class="card"><div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill">Code ${code}</span></div><h2>${esc(Q[i].q)}</h2>${tilesHTML(i,{disabled:1,cls:k=>k===Q[i].c?'ok':'dim'})}<div class="dist">${cnt.map((c,k)=>`<div class="dbar"><b>${L[k]}</b><span class="t${k}" style="width:${Math.max(2,c/mx*100)}%"></span><span>${c}</span></div>`).join('')}</div><p class="verse">${esc(Q[i].v)}</p><h2 style="margin-top:20px">Classement</h2>${boardHTML(rows())}<div class="row" style="margin-top:18px"><button class="btn" id="nx">${i+1<Q.length?'Question suivante':'Voir le podium'}</button></div></div>`,'Animateur');
-    document.getElementById('nx').onclick=nextQ;return;}
+    shell(`<div class="card"><div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill">Code ${code}</span></div><h2>${esc(Q[i].q)}</h2>${tilesHTML(i,{disabled:1,cls:k=>k===Q[i].c?'ok':'dim'})}<div class="dist">${cnt.map((c,k)=>`<div class="dbar"><b>${L[k]}</b><span class="t${k}" style="width:${Math.max(2,c/mx*100)}%"></span><span>${c}</span></div>`).join('')}</div><p class="verse">${esc(Q[i].v)}</p><h2 style="margin-top:20px">Classement</h2>${boardHTML(rows())}${navHTML(`<button class="btn" id="nx">${i+1<Q.length?'Question suivante':'Voir le podium'}</button>`)}</div>`,'Animateur');
+    document.getElementById('nx').onclick=nextQ;bindNav();return;}
   if(ph==='end'){
-    shell(`<div class="card"><h1>Podium</h1>${boardHTML(rows())}<p class="verse">« C'est bien, bon et fidèle serviteur ; tu as été fidèle en peu de chose, je te confierai beaucoup. » Matthieu 25:21</p><div class="row"><button class="btn" id="again">Rejouer avec les mêmes joueurs</button></div></div>`,'Animateur');
-    document.getElementById('again').onclick=()=>{for(const p of Object.values(players))p.a={};live={phase:'lobby',q:-1,startedAt:0};broadcast();hostRender();};}
+    shell(`<div class="card"><h1>Podium</h1>${boardHTML(rows())}<p class="verse">« C'est bien, bon et fidèle serviteur ; tu as été fidèle en peu de chose, je te confierai beaucoup. » Matthieu 25:21</p><div class="row"><button class="btn" id="again">Recommencer avec les mêmes joueurs</button><button class="btn ghost" id="pv">← Dernière question</button><button class="btn ghost" id="hi">Historique</button><button class="btn ghost" id="qt">Retour à l'accueil</button></div></div>`,'Animateur');
+    document.getElementById('again').onclick=restartGame;document.getElementById('hi').onclick=()=>showHistory(backToHost);bindNav();}
 }
 
 /* ================= PARTICIPANT ================= */
@@ -223,6 +267,7 @@ function onState(d){
 function playerRender(){
   if(view!=='player'||!st)return;clearInterval(tick);
   const head=`<div class="qhead"><span class="pill">${esc(me.nick)}</span><span class="pill">${+st.score||0} pts</span></div>`,i=+st.q;
+  if(st.phase==='closed'){joined=false;stopNet();shell(`<div class="card"><h2>Partie terminée</h2><p class="soft">L'animateur a fermé la partie. Merci d'avoir joué !</p><p class="verse">« C'est bien, bon et fidèle serviteur. » Matthieu 25:21</p><button class="btn ghost" id="bk">Rejoindre une autre partie</button></div>`,'Participant');document.getElementById('bk').onclick=()=>{st=null;rKey='';joinForm();};return;}
   if(st.phase==='lobby'){shell(`<div class="card">${head}<h2>Vous êtes inscrit !</h2><p class="soft">Regardez le grand écran : la partie va commencer.</p>${lamp}</div>`,'Participant');return;}
   if(!(i>=0&&i<Q.length))return;
   if(st.phase==='question'){
