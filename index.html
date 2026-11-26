@@ -105,13 +105,24 @@ const rk=n=>n+(n===1?'er':'e');
 
 function intro(){
   view='intro';clearInterval(tick);
-  shell(`<div class="card hero"><div><h1>Servir Dieu sans négligence</h1><p class="soft">10 questions tirées de l'exhortation. L'animateur projette le jeu depuis un ordinateur ; les participants répondent avec leur téléphone, sans compte ni application.</p><div class="row" style="margin-top:20px">${isPhone?`<button class="btn" id="pl">Je participe</button><button class="btn ghost" id="ho">J'anime</button>`:`<button class="btn" id="ho">J'anime (ordinateur)</button><button class="btn ghost" id="pl">Je participe</button>`}</div></div>${lamp}</div>`,'Accueil');
-  document.getElementById('ho').onclick=hostStart;document.getElementById('pl').onclick=()=>joinForm();
+  shell(`<div class="card hero"><div><h1>Servir Dieu sans négligence</h1><p class="soft">10 questions tirées de l'exhortation. L'animateur projette le jeu depuis un ordinateur ; les participants répondent avec leur téléphone, sans compte ni application.</p><div class="row" style="margin-top:20px">${isAdmin?`<button class="btn" id="ho">J'anime (ordinateur)</button><button class="btn ghost" id="pl">Je participe</button><button class="btn ghost" id="lo">Quitter le mode animateur</button>`:`<button class="btn" id="pl">Je participe</button>`}</div></div>${lamp}</div>`,isAdmin?'Animateur reconnu':'Accueil');
+  document.getElementById('pl').onclick=()=>joinForm();
+  if(isAdmin){document.getElementById('ho').onclick=hostStart;document.getElementById('lo').onclick=()=>{isAdmin=false;try{localStorage.removeItem('quizadmin')}catch(e){}intro();};}
+}
+/* Accès animateur : réservé au détenteur de la clé (seule son empreinte SHA-256 est dans ce fichier). */
+const ADMIN_HASH="1337816538b8f887d96f53bafa27ce45d33224bd8bfe5cf17acea78f7b21412d";
+let isAdmin=false;
+async function sha(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+async function checkAdmin(){
+  let k=params.get('admin');let saved=null;try{saved=localStorage.getItem('quizadmin')}catch(e){}
+  if(!k&&saved)k=saved;if(!k)return false;
+  try{if(await sha(k)===ADMIN_HASH){try{localStorage.setItem('quizadmin',k)}catch(e){}if(params.get('admin')){history.replaceState(null,'',location.pathname);}return true;}}catch(e){}
+  return false;
 }
 
 /* ================= ANIMATEUR ================= */
 let hpeer=null,code='',players={},live={phase:'lobby',q:-1,startedAt:0},revealT=null;
-function hostStart(){view='host';code=String(Math.floor(1000+Math.random()*9000));shell(`<div class="card"><h2>Ouverture de la salle…</h2><p class="soft">Connexion au relais en cours.</p></div>`,'Animateur');
+function hostStart(){if(!isAdmin){intro();return;}view='host';code=String(Math.floor(1000+Math.random()*9000));shell(`<div class="card"><h2>Ouverture de la salle…</h2><p class="soft">Connexion au relais en cours.</p></div>`,'Animateur');
   try{hpeer=new Peer(PREFIX+code,{debug:1});}catch(e){shell(`<div class="card"><h2 class="err">Connexion impossible</h2><p>La bibliothèque de connexion n'a pas pu se charger. Vérifiez la connexion Internet de l'ordinateur.</p></div>`,'Animateur');return;}
   hpeer.on('open',()=>hostRender());
   hpeer.on('error',e=>{if(e.type==='unavailable-id'){hpeer.destroy();hostStart();}else setStatus('Erreur : '+e.type);});
@@ -190,7 +201,7 @@ function playerRender(){
   if(st.phase==='end'){shell(`<div class="card hero"><div><h2>Partie terminée</h2><p class="big">${st.score} pts</p>${st.rank?`<p>Classement final : ${rk(st.rank)} sur ${st.count}</p>`:''}<p class="verse">« C'est bien, bon et fidèle serviteur. » Matthieu 25:21</p></div>${lamp}</div>`,'Participant');}
 }
 
-if(params.get('code')){me.code=params.get('code');joinForm();}else intro();
+if(params.get('code')){me.code=params.get('code');joinForm();}else{intro();checkAdmin().then(ok=>{isAdmin=ok;if(view==='intro')intro();});}
 }
 </script>
 </body>
