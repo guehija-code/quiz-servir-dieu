@@ -123,24 +123,30 @@ async function checkAdmin(){
 /* ================= ANIMATEUR ================= */
 let hpeer=null,code='',players={},live={phase:'lobby',q:-1,startedAt:0},revealT=null;
 function hostStart(){if(!isAdmin){intro();return;}view='host';code=String(Math.floor(1000+Math.random()*9000));shell(`<div class="card"><h2>Ouverture de la salle…</h2><p class="soft">Connexion au relais en cours.</p></div>`,'Animateur');
-  try{hpeer=new Peer(PREFIX+code,{debug:1});}catch(e){shell(`<div class="card"><h2 class="err">Connexion impossible</h2><p>La bibliothèque de connexion n'a pas pu se charger. Vérifiez la connexion Internet de l'ordinateur.</p></div>`,'Animateur');return;}
+  try{hpeer=new Peer(PREFIX+code,{debug:1,...ICE});}catch(e){shell(`<div class="card"><h2 class="err">Connexion impossible</h2><p>La bibliothèque de connexion n'a pas pu se charger. Vérifiez la connexion Internet de l'ordinateur.</p></div>`,'Animateur');return;}
   hpeer.on('open',()=>hostRender());
   hpeer.on('error',e=>{if(e.type==='unavailable-id'){hpeer.destroy();hostStart();}else setStatus('Erreur : '+e.type);});
   hpeer.on('disconnected',()=>{setStatus('Reconnexion…');try{hpeer.reconnect();}catch(e){}});
   hpeer.on('connection',conn=>{
     conn.on('data',d=>hostData(conn,d));
-    conn.on('close',()=>{for(const k in players)if(players[k].conn===conn)players[k].conn=null;hostLive();});
+    conn.on('close',()=>{for(const k in players)if(players[k].conn===conn){players[k].conn=null;players[k].goneAt=Date.now();}hostLive();});
+    conn.on('error',()=>{});
   });
 }
 function hostData(conn,d){
   if(!d||typeof d!=='object')return;
-  if(d.t==='hello'){const n=String(d.n||'').trim().slice(0,20);if(!n)return;const p=players[n]||{n,a:{}};p.conn=conn;players[n]=p;send(conn,stateFor(p));hostLive();return;}
-  if(d.t==='ans'){const p=Object.values(players).find(x=>x.conn===conn);if(!p||live.phase!=='question'||+d.q!==live.q||p.a[live.q])return;const ch=+d.c,ms=+d.ms;if(!(ch>=0&&ch<4))return;p.a[live.q]=[ch,Math.max(0,Math.min(ms,Q[live.q].t*1000))];hostLive();
-    if(Object.values(players).every(x=>x.a[live.q]||!x.conn))setTimeout(reveal,600);}
+  if(d.t==='hello'){let n=String(d.n||'').trim().slice(0,20);if(!n)return;const id=String(d.id||n).slice(0,40);let p=players[id];
+    if(!p){const taken=new Set(Object.values(players).map(x=>x.n));let base=n,k=2;while(taken.has(n)){n=base.slice(0,17)+' '+k;k++;}p={n,a:{}};players[id]=p;}
+    if(p.conn&&p.conn!==conn){try{p.conn.close();}catch(e){}}p.conn=conn;p.goneAt=0;conn._pid=id;send(conn,stateFor(p));hostLive();return;}
+  if(d.t==='ping'){const p=players[conn._pid];if(p)send(conn,stateFor(p));return;}
+  if(d.t==='ans'){const p=players[conn._pid];if(!p)return;
+    if(live.phase==='question'&&+d.q===live.q&&!p.a[live.q]){const ch=+d.c,ms=+d.ms;if(ch>=0&&ch<4&&isFinite(ms)){p.a[live.q]=[ch,Math.max(0,Math.min(ms,Q[live.q].t*1000))];hostLive();
+      if(Object.values(players).every(x=>x.a[live.q]||(!(x.conn&&x.conn.open)&&x.goneAt&&Date.now()-x.goneAt>15000)))setTimeout(reveal,800);}}
+    send(conn,stateFor(p));}
 }
 function send(conn,msg){try{if(conn&&conn.open)conn.send(msg);}catch(e){}}
 function rows(){return Object.values(players).map(p=>({n:p.n,s:total(p.a)})).sort((x,y)=>y.s-x.s);}
-function stateFor(p){const r=rows();const pos=r.findIndex(x=>x.n===p.n)+1;return {t:'state',phase:live.phase,q:live.q,mine:p.a[live.q]||null,score:total(p.a),rank:pos||null,count:r.length,top:r.slice(0,3)};}
+function stateFor(p){const r=rows();const pos=r.findIndex(x=>x.n===p.n)+1;return {t:'state',name:p.n,phase:live.phase,q:live.q,mine:p.a[live.q]||null,score:total(p.a),rank:pos||null,count:r.length,top:r.slice(0,3)};}
 function broadcast(){for(const p of Object.values(players))send(p.conn,stateFor(p));}
 function joinURL(){const u=new URL(location.href);u.search='?code='+code;u.hash='';return u.toString();}
 function nextQ(){clearTimeout(revealT);const q=live.q+1;if(q>=Q.length){live={phase:'end',q:live.q,startedAt:0};broadcast();hostRender();return;}live={phase:'question',q,startedAt:Date.now()};broadcast();hostRender();revealT=setTimeout(reveal,Q[q].t*1000+1500);}
@@ -171,37 +177,68 @@ function hostRender(){
 
 /* ================= PARTICIPANT ================= */
 let ppeer=null,conn=null,me=store.get('quizlive')||{code:'',nick:''},st=null,recvAt=0,lastKey='',retry=0;
+let myId=store.get('quizid');if(!myId){myId=Math.random().toString(36).slice(2)+Date.now().toString(36);store.set('quizid',myId);}
+let gen=0,retryT=null,openT=null,beatT=null,lastMsg=0,pend=null,rKey='',joined=false;
+const ICE={config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:['turn:eu-0.turn.peerjs.com:3478','turn:us-0.turn.peerjs.com:3478'],username:'peerjs',credential:'peerjsp'}]}};
 function joinForm(err){
-  view='player';clearInterval(tick);
+  view='player';clearInterval(tick);stopNet();joined=false;
   const c=params.get('code')||me.code||'';
   shell(`<div class="card"><h2>Rejoindre la partie</h2>${err?`<p class="err">${esc(err)}</p>`:''}<form id="jf"><label class="soft small" for="cd">Code affiché à l'écran</label><input id="cd" inputmode="numeric" maxlength="4" value="${esc(c)}" placeholder="1234"><label class="soft small" for="nk" style="display:block;margin-top:12px">Votre pseudo</label><input id="nk" maxlength="20" value="${esc(me.nick)}" placeholder="Ex. Emma" autocomplete="nickname"><div class="row" style="margin-top:16px"><button class="btn" type="submit">Rejoindre</button></div></form></div>`,'Participant');
-  document.getElementById('jf').onsubmit=e=>{e.preventDefault();const cd=document.getElementById('cd').value.trim(),nk=document.getElementById('nk').value.trim().slice(0,20);if(!/^\d{4}$/.test(cd)){joinForm("Le code doit comporter 4 chiffres.");return;}if(!nk){joinForm("Choisissez un pseudo.");return;}me={code:cd,nick:nk};store.set('quizlive',me);connect();};
+  document.getElementById('jf').onsubmit=e=>{e.preventDefault();const cd=document.getElementById('cd').value.trim(),nk=document.getElementById('nk').value.trim().slice(0,20);if(!/^\d{4}$/.test(cd)){joinForm("Le code doit comporter 4 chiffres.");return;}if(!nk){joinForm("Choisissez un pseudo.");return;}me={code:cd,nick:nk,ts:Date.now()};store.set('quizlive',me);retry=0;joined=true;connect();};
 }
+function stopNet(){gen++;clearTimeout(retryT);clearTimeout(openT);clearInterval(beatT);try{if(conn)conn.close();}catch(e){}try{if(ppeer)ppeer.destroy();}catch(e){}conn=null;ppeer=null;}
+function waitScreen(title,sub){if(st){setStatus(title);return;}shell(`<div class="card"><h2>${esc(title)}</h2><p class="soft">${esc(sub)}</p></div>`,'Participant');}
 function connect(){
-  shell(`<div class="card"><h2>Connexion…</h2><p class="soft">Recherche de la partie ${esc(me.code)}.</p></div>`,'Participant');
-  try{if(ppeer)ppeer.destroy();ppeer=new Peer({debug:1});}catch(e){joinForm("Connexion impossible : vérifiez votre accès Internet.");return;}
-  ppeer.on('open',()=>{conn=ppeer.connect(PREFIX+me.code,{reliable:true});
-    conn.on('open',()=>{retry=0;conn.send({t:'hello',n:me.nick});});
-    conn.on('data',d=>{if(d&&d.t==='state'){const key=d.phase+':'+d.q;if(key!==lastKey){lastKey=key;recvAt=Date.now();}st=d;playerRender();}});
-    conn.on('close',()=>lost());});
-  ppeer.on('error',e=>{if(e.type==='peer-unavailable')joinForm("Aucune partie avec ce code. Vérifiez le code à l'écran.");else lost();});
+  stopNet();const g=gen;view='player';
+  waitScreen(retry?'Reconnexion…':'Connexion…','Recherche de la partie '+me.code+'.');
+  try{ppeer=new Peer({debug:1,...ICE});}catch(e){joinForm("Connexion impossible : vérifiez votre accès Internet.");return;}
+  openT=setTimeout(()=>{if(g===gen)lost(g);},15000);
+  ppeer.on('open',()=>{if(g!==gen)return;
+    const c=ppeer.connect(PREFIX+me.code,{reliable:true,serialization:'json'});conn=c;
+    c.on('open',()=>{if(g!==gen)return;clearTimeout(openT);retry=0;lastMsg=Date.now();c.send({t:'hello',n:me.nick,id:myId});
+      clearInterval(beatT);beatT=setInterval(()=>{if(g!==gen)return;if(Date.now()-lastMsg>12000){lost(g);return;}try{c.send({t:'ping'});}catch(e){}},4000);});
+    c.on('data',d=>{if(g!==gen)return;lastMsg=Date.now();onState(d);});
+    c.on('close',()=>{if(g===gen)lost(g);});
+    c.on('error',()=>{if(g===gen)lost(g);});});
+  ppeer.on('disconnected',()=>{if(g!==gen)return;try{ppeer.reconnect();}catch(e){}});
+  ppeer.on('error',e=>{if(g!==gen)return;if(e&&e.type==='peer-unavailable'){if(st){lost(g);}else{joinForm("Aucune partie avec ce code. Vérifiez le code affiché sur le grand écran.");}}else lost(g);});
 }
-function lost(){if(view!=='player')return;if(retry<5){retry++;shell(`<div class="card"><h2>Connexion perdue</h2><p class="soft">Nouvelle tentative (${retry}/5)…</p></div>`,'Participant');setTimeout(connect,1500*retry);}else joinForm("La connexion à la partie a été perdue.");}
+function lost(g){
+  if(g!==gen||view!=='player'||!joined)return;
+  stopNet();retry++;
+  if(retry>8){shell(`<div class="card"><h2>Connexion perdue</h2><p class="soft">Impossible de joindre la partie. Si vous êtes sur le Wi-Fi, essayez en 4G.</p><div class="row" style="margin-top:14px"><button class="btn" id="rt">Réessayer</button><button class="btn ghost" id="bk">Changer de code</button></div></div>`,'Participant');document.getElementById('rt').onclick=()=>{retry=0;connect();};document.getElementById('bk').onclick=()=>joinForm();return;}
+  waitScreen('Reconnexion…','Tentative '+retry+' sur 8.');
+  retryT=setTimeout(connect,Math.min(800*retry,4000));
+}
+function onState(d){
+  if(!d||d.t!=='state')return;
+  const key=d.phase+':'+d.q;if(key!==lastKey){lastKey=key;recvAt=Date.now();if(!(pend&&pend.q===d.q&&d.phase==='question'))pend=null;}
+  if(d.name&&d.name!==me.nick){me.nick=String(d.name).slice(0,24);store.set('quizlive',{...me,ts:Date.now()});}
+  if(d.mine)pend=null;
+  if(pend&&d.phase==='question'&&d.q===pend.q&&!d.mine){try{conn&&conn.open&&conn.send({t:'ans',q:pend.q,c:pend.c,ms:pend.ms});}catch(e){}}
+  st=d;
+  const k=JSON.stringify([d.phase,d.q,!!(d.mine||pend),d.score,d.rank,d.count,me.nick]);
+  if(k!==rKey){rKey=k;playerRender();}else setStatus('Participant');
+}
 function playerRender(){
   if(view!=='player'||!st)return;clearInterval(tick);
-  const head=`<div class="qhead"><span class="pill">${esc(me.nick)}</span><span class="pill">${st.score} pts</span></div>`,i=st.q;
+  const head=`<div class="qhead"><span class="pill">${esc(me.nick)}</span><span class="pill">${+st.score||0} pts</span></div>`,i=+st.q;
   if(st.phase==='lobby'){shell(`<div class="card">${head}<h2>Vous êtes inscrit !</h2><p class="soft">Regardez le grand écran : la partie va commencer.</p>${lamp}</div>`,'Participant');return;}
+  if(!(i>=0&&i<Q.length))return;
   if(st.phase==='question'){
-    if(st.mine){shell(`<div class="card">${head}<h2>Réponse enregistrée</h2><p class="soft">Attendez la révélation sur le grand écran.</p></div>`,'Participant');return;}
+    if(st.mine||(pend&&pend.q===i)){shell(`<div class="card">${head}<h2>Réponse enregistrée</h2><p class="soft">${st.mine?'Attendez la révélation sur le grand écran.':'Envoi en cours…'}</p></div>`,'Participant');return;}
     shell(`<div class="card">${head}<div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill" id="secs"></span></div><h2>${esc(Q[i].q)}</h2><div class="timer"><i id="bar"></i></div>${tilesHTML(i,{})}</div>`,'Participant');
-    app.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{if(st.mine)return;const c=+b.dataset.i;st={...st,mine:[c,Date.now()-recvAt]};try{conn.send({t:'ans',q:i,c,ms:Date.now()-recvAt});}catch(e){}playerRender();});
-    timerRun(Q[i].t,recvAt,()=>{if(!st.mine)shell(`<div class="card">${head}<h2>Temps écoulé</h2><p class="soft">Attendez la révélation sur le grand écran.</p></div>`,'Participant');});return;}
+    app.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{if(st.mine||pend)return;const c=+b.dataset.i,ms=Date.now()-recvAt;pend={q:i,c,ms};try{conn&&conn.open&&conn.send({t:'ans',q:i,c,ms});}catch(e){}rKey='';playerRender();});
+    timerRun(Q[i].t,recvAt,()=>{if(!st.mine&&!pend&&st.phase==='question'&&+st.q===i)shell(`<div class="card">${head}<h2>Temps écoulé</h2><p class="soft">Attendez la révélation sur le grand écran.</p></div>`,'Participant');});return;}
   if(st.phase==='reveal'){const ok=st.mine&&st.mine[0]===Q[i].c;
     shell(`<div class="card">${head}<p class="feedback ${ok?'good':'bad'}">${ok?`Bonne réponse ! +${pts(i,st.mine)}`:st.mine?'Pas tout à fait':'Pas de réponse'}</p><p>La bonne réponse : <b>${L[Q[i].c]} — ${esc(Q[i].a[Q[i].c])}</b></p><p class="verse">${esc(Q[i].v)}</p>${st.rank?`<p class="soft">Vous êtes ${rk(st.rank)} sur ${st.count}.</p>`:''}</div>`,'Participant');return;}
-  if(st.phase==='end'){shell(`<div class="card hero"><div><h2>Partie terminée</h2><p class="big">${st.score} pts</p>${st.rank?`<p>Classement final : ${rk(st.rank)} sur ${st.count}</p>`:''}<p class="verse">« C'est bien, bon et fidèle serviteur. » Matthieu 25:21</p></div>${lamp}</div>`,'Participant');}
+  if(st.phase==='end'){shell(`<div class="card hero"><div><h2>Partie terminée</h2><p class="big">${+st.score||0} pts</p>${st.rank?`<p>Classement final : ${rk(st.rank)} sur ${st.count}</p>`:''}<p class="verse">« C'est bien, bon et fidèle serviteur. » Matthieu 25:21</p></div>${lamp}</div>`,'Participant');}
 }
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&view==='player'&&joined&&(!conn||!conn.open||Date.now()-lastMsg>8000)){retry=0;connect();}});
 
-if(params.get('code')){me.code=params.get('code');joinForm();}else{intro();checkAdmin().then(ok=>{isAdmin=ok;if(view==='intro')intro();});}
+const pc=params.get('code');
+if(pc){me.code=pc;if(me.nick&&store.get('quizlive')&&store.get('quizlive').code===pc&&Date.now()-(store.get('quizlive').ts||0)<3*3600e3){view='player';joined=true;connect();}else joinForm();}
+else{intro();checkAdmin().then(ok=>{isAdmin=ok;if(view==='intro')intro();});}
 }
 </script>
 </body>
