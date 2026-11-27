@@ -66,6 +66,14 @@ input{font:16px Sora,sans-serif;padding:14px 16px;border-radius:12px;border:2px 
 .qr img,.qr canvas{display:block;width:200px;height:200px}
 .url{word-break:break-all;font-size:15px;color:var(--soft)}
 .err{color:#ff9d93}
+.cloudwrap{margin-top:22px}
+.cloud{position:relative;container-type:inline-size;aspect-ratio:2/1;border-radius:18px;background:radial-gradient(ellipse at 50% 45%,#22355f 0,#111d38 70%);overflow:hidden}
+.cloud span{position:absolute;white-space:nowrap;line-height:1;font-weight:800;opacity:0;transform:translate(-50%,-50%) scale(.3);filter:blur(6px);transition:opacity .6s ease,transform .7s cubic-bezier(.2,1.4,.4,1),filter .6s ease;text-shadow:0 2px 14px rgba(0,0,0,.35)}
+.cloud span.on{opacity:1;transform:translate(-50%,-50%) scale(1);filter:none}
+.cloud span.lit{font-family:Literata,Georgia,serif;font-style:italic;font-weight:500}
+#confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:20}
+@media(prefers-reduced-motion:reduce){.cloud span{transition:none}}
+
 .modal{position:fixed;inset:0;background:rgba(5,10,22,.72);display:grid;place-items:center;padding:16px;z-index:10}.modal .card{max-width:520px;width:100%}
 .hrow{width:100%;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}.hrow:hover{outline:2px solid var(--line)}.hq{display:grid;gap:4px;margin-bottom:6px}
 </style>
@@ -123,6 +131,42 @@ async function checkAdmin(){
   try{if(await sha(k)===ADMIN_HASH){try{localStorage.setItem('quizadmin',k)}catch(e){}if(params.get('admin')){history.replaceState(null,'',location.pathname);}return true;}}catch(e){}
   return false;
 }
+
+/* ================= CÉLÉBRATION DE FIN ================= */
+const WORDS=[["Servir",10],["Jésus",10],["Fidèle",8],["Corps de Christ",8],["Grâce",7],["Identité",6],["Mosaïque",7],["Dons",7],["Gloire de Dieu",6],["Église",6],["Talents",6],["Ranimer le feu",6],["Suivre Jésus",5],["Cinq pains",5],["Lumière du monde",5],["Sauvés par grâce",5],["avad",5,1],["shamar",4,1],["ezer",4,1],["charisma",4,1],["anazôpureô",4,1],["oikonomos",3,1],["Chaque membre compte",5],["Petites choses",4],["Betsaleel",3],["Jardin d'Éden",4],["Adam et Ève",4],["Braises",3],["Zèle",3],["Ensemble",3],["Bon et fidèle serviteur",6]];
+const COLS=['#e8b23a','#f5d27a','#ff8a7a','#3fc7b9','#a88cf0','#9cc96b','#f3eee2'];
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function confetti(){
+  if(reduced)return;const old=document.getElementById('confetti');if(old)old.remove();
+  const cv=document.createElement('canvas');cv.id='confetti';document.body.appendChild(cv);
+  const dpr=Math.min(2,window.devicePixelRatio||1),W=innerWidth,H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;const x=cv.getContext('2d');if(!x){cv.remove();return;}x.scale(dpr,dpr);
+  const P=[];const burst=(cx,cy,n)=>{for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,v=6+Math.random()*12;P.push({x:cx,y:cy,vx:Math.cos(a)*v,vy:Math.sin(a)*v-6,w:6+Math.random()*7,h:4+Math.random()*6,r:Math.random()*6,vr:(Math.random()-.5)*.4,c:COLS[i%COLS.length],o:1,round:Math.random()<.3});}};
+  burst(W/2,H*.45,170);setTimeout(()=>burst(W*.2,H*.55,80),250);setTimeout(()=>burst(W*.8,H*.55,80),450);
+  const t0=performance.now();
+  (function f(t){x.clearRect(0,0,W,H);let alive=0;for(const p of P){p.vy+=.32;p.vx*=.985;p.vy*=.985;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;if(t-t0>2600)p.o-=.02;if(p.o<=0||p.y>H+40)continue;alive++;x.save();x.globalAlpha=Math.max(0,p.o);x.translate(p.x,p.y);x.rotate(p.r);x.fillStyle=p.c;if(p.round){x.beginPath();x.arc(0,0,p.w/2.4,0,7);x.fill();}else x.fillRect(-p.w/2,-p.h/2,p.w,p.h*Math.abs(Math.cos(p.r*2))+1);x.restore();}
+    if(alive&&t-t0<6000)requestAnimationFrame(f);else cv.remove();})(t0);
+}
+function cloudHTML(){return `<div class="cloudwrap"><div class="qhead"><h2 style="margin:0">Ce que nous retenons</h2><button class="btn ghost" id="replay">Rejouer l'animation</button></div><div class="cloud" id="cloud" aria-label="Nuage des mots clés de l'exhortation"></div></div>`;}
+function buildCloud(el,delay){
+  if(!el)return;el.innerHTML='';
+  const narrow=el.clientWidth<600,VW=1000,VH=narrow?1100:520,base=narrow?34:23;
+  el.style.aspectRatio=VW+'/'+VH;
+  const cx=document.createElement('canvas').getContext('2d');
+  const placed=[],spans=[];const ws=WORDS.slice().sort((a,b)=>b[1]-a[1]);
+  ws.forEach((w,i)=>{const fs=base*(0.75+w[1]*0.15);
+    if(cx)cx.font=w[2]?`italic 500 ${fs}px Literata, Georgia, serif`:`800 ${fs}px Sora, system-ui, sans-serif`;
+    const bw=(cx?cx.measureText(w[0]).width:w[0].length*fs*0.62)+fs*0.5,bh=fs*1.25;let ok=false,px=VW/2,py=VH/2;
+    for(let k=0;k<2000&&!ok;k++){const ang=k*.3,rad=2*ang;px=VW/2+rad*Math.cos(ang)*(VW/VH);py=VH/2+rad*Math.sin(ang);
+      const r={l:px-bw/2,t:py-bh/2,r:px+bw/2,b:py+bh/2};if(r.l<12||r.t<10||r.r>VW-12||r.b>VH-10)continue;
+      ok=!placed.some(q=>!(r.r<q.l||r.l>q.r||r.b<q.t||r.t>q.b));if(ok)placed.push(r);}
+    if(!ok)return;
+    const sp=document.createElement('span');sp.textContent=w[0];if(w[2])sp.className='lit';
+    sp.style.fontSize=(fs/10).toFixed(2)+'cqw';sp.style.color=COLS[i%COLS.length];
+    sp.style.left=(px/VW*100).toFixed(2)+'%';sp.style.top=(py/VH*100).toFixed(2)+'%';el.appendChild(sp);spans.push(sp);});
+  spans.forEach((sp,i)=>setTimeout(()=>sp.classList.add('on'),reduced?0:delay+i*110));
+}
+function celebrate(){confetti();const go=()=>buildCloud(document.getElementById('cloud'),reduced?0:900);(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(()=>requestAnimationFrame(go));const r=document.getElementById('replay');if(r)r.onclick=celebrate;}
+let cloudRT=null;addEventListener('resize',()=>{clearTimeout(cloudRT);cloudRT=setTimeout(()=>{const el=document.getElementById('cloud');if(el&&((el.clientWidth<600)!==(el.style.aspectRatio==='1000/1100')))buildCloud(el,0);},300);});
 
 /* ================= ANIMATEUR ================= */
 let hpeer=null,code='',players={},live={phase:'lobby',q:-1,startedAt:0},revealT=null;
@@ -217,8 +261,8 @@ function hostRender(){
     shell(`<div class="card"><div class="qhead"><span class="pill">Question ${i+1} / ${Q.length}</span><span class="pill">Code ${code}</span></div><h2>${esc(Q[i].q)}</h2>${tilesHTML(i,{disabled:1,cls:k=>k===Q[i].c?'ok':'dim'})}<div class="dist">${cnt.map((c,k)=>`<div class="dbar"><b>${L[k]}</b><span class="t${k}" style="width:${Math.max(2,c/mx*100)}%"></span><span>${c}</span></div>`).join('')}</div><p class="verse">${esc(Q[i].v)}</p><h2 style="margin-top:20px">Classement</h2>${boardHTML(rows())}${navHTML(`<button class="btn" id="nx">${i+1<Q.length?'Question suivante':'Voir le podium'}</button>`)}</div>`,'Animateur');
     document.getElementById('nx').onclick=nextQ;bindNav();return;}
   if(ph==='end'){
-    shell(`<div class="card"><h1>Podium</h1>${boardHTML(rows())}<p class="verse">« C'est bien, bon et fidèle serviteur ; tu as été fidèle en peu de chose, je te confierai beaucoup. » Matthieu 25:21</p><div class="row"><button class="btn" id="again">Recommencer avec les mêmes joueurs</button><button class="btn ghost" id="pv">← Dernière question</button><button class="btn ghost" id="hi">Historique</button><button class="btn ghost" id="qt">Retour à l'accueil</button></div></div>`,'Animateur');
-    document.getElementById('again').onclick=restartGame;document.getElementById('hi').onclick=()=>showHistory(backToHost);bindNav();}
+    shell(`<div class="card"><h1>Podium</h1>${boardHTML(rows())}<p class="verse">« C'est bien, bon et fidèle serviteur ; tu as été fidèle en peu de chose, je te confierai beaucoup. » Matthieu 25:21</p>${cloudHTML()}<div class="row" style="margin-top:18px"><button class="btn" id="again">Recommencer avec les mêmes joueurs</button><button class="btn ghost" id="pv">← Dernière question</button><button class="btn ghost" id="hi">Historique</button><button class="btn ghost" id="qt">Retour à l'accueil</button></div></div>`,'Animateur');
+    document.getElementById('again').onclick=restartGame;document.getElementById('hi').onclick=()=>showHistory(backToHost);bindNav();celebrate();}
 }
 
 /* ================= PARTICIPANT ================= */
@@ -279,7 +323,7 @@ function playerRender(){
     timerRun(Q[i].t,recvAt,()=>{if(!st.mine&&!pend&&st.phase==='question'&&+st.q===i)shell(`<div class="card">${head}<h2>Temps écoulé</h2><p class="soft">Attendez la révélation sur le grand écran.</p></div>`,'Participant');});return;}
   if(st.phase==='reveal'){const ok=st.mine&&st.mine[0]===Q[i].c;
     shell(`<div class="card">${head}<p class="feedback ${ok?'good':'bad'}">${ok?`Bonne réponse ! +${pts(i,st.mine)}`:st.mine?'Pas tout à fait':'Pas de réponse'}</p><p>La bonne réponse : <b>${L[Q[i].c]} — ${esc(Q[i].a[Q[i].c])}</b></p><p class="verse">${esc(Q[i].v)}</p>${st.rank?`<p class="soft">Vous êtes ${rk(st.rank)} sur ${st.count}.</p>`:''}</div>`,'Participant');return;}
-  if(st.phase==='end'){shell(`<div class="card hero"><div><h2>Partie terminée</h2><p class="big">${+st.score||0} pts</p>${st.rank?`<p>Classement final : ${rk(st.rank)} sur ${st.count}</p>`:''}<p class="verse">« C'est bien, bon et fidèle serviteur. » Matthieu 25:21</p></div>${lamp}</div>`,'Participant');}
+  if(st.phase==='end'){shell(`<div class="card hero"><div><h2>Partie terminée</h2><p class="big">${+st.score||0} pts</p>${st.rank?`<p>Classement final : ${rk(st.rank)} sur ${st.count}</p>`:''}<p class="verse">« C'est bien, bon et fidèle serviteur. » Matthieu 25:21</p></div>${lamp}</div>${cloudHTML()}`,'Participant');celebrate();}
 }
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&view==='player'&&joined&&(!conn||!conn.open||Date.now()-lastMsg>8000)){retry=0;connect();}});
 
